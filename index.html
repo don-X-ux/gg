@@ -132,12 +132,11 @@
 
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     let currentUser = '';
-    let currentAvatar = 'https://api.dicebear.com/7.x/bottts/svg?seed=Guest'; // Avatar mặc định
+    let currentAvatar = 'https://api.dicebear.com/7.x/bottts/svg?seed=Guest';
     let isAdmin = false;
     let selectedFile = null;
     let tempAvatarFile = null;
 
-    // Tự động khôi phục phiên làm việc từ LocalStorage
     window.onload = () => {
       const savedUser = localStorage.getItem('chat_username');
       const savedAvatar = localStorage.getItem('chat_avatar');
@@ -190,7 +189,6 @@
       document.getElementById('header-user-avatar').src = currentAvatar;
     }
 
-    /* TRANG CÁ NHÂN: ĐỔI TÊN & AVATAR */
     function openProfileModal() {
       document.getElementById('edit-username-input').value = currentUser;
       document.getElementById('edit-avatar-preview').src = currentAvatar;
@@ -213,9 +211,10 @@
       const newName = document.getElementById('edit-username-input').value.trim();
       if (!newName) return alert('Tên không được để trống!');
 
-      // Upload Avatar mới lên Supabase nếu có chọn ảnh
       if (tempAvatarFile) {
-        const path = `avatars/${Date.now()}_${tempAvatarFile.name}`;
+        const cleanFileName = tempAvatarFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const path = `avatars/${Date.now()}_${cleanFileName}`;
+        
         const { error } = await _supabase.storage.from('post-images').upload(path, tempAvatarFile);
         if (error) return alert('Lỗi tải avatar: ' + error.message);
         
@@ -232,7 +231,6 @@
       loadPosts();
     }
 
-    /* THAO TÁC FILE VÀ CHAT */
     function triggerFileInput(acceptType) {
       const fileInput = document.getElementById('hidden-file-input');
       fileInput.accept = acceptType;
@@ -333,7 +331,9 @@
 
       if (selectedFile) {
         fileName = selectedFile.name;
-        const storagePath = `${Date.now()}_${selectedFile.name}`;
+        const cleanFileName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storagePath = `${Date.now()}_${cleanFileName}`;
+
         const { error } = await _supabase.storage.from('post-images').upload(storagePath, selectedFile);
         if (error) return alert('Lỗi tải file lên: ' + error.message);
 
