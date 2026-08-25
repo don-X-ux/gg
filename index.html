@@ -214,16 +214,48 @@
 
       if (selectedFile) {
         fileName = selectedFile.name;
-        // Đặt tên file ngẫu nhiên trên Storage để tránh trùng lặp
-        const storagePath = `${Date.now()}_${selectedFile.name}`;
-        
-        const { data, error } = await _supabase.storage
+
+        // Giới hạn 50 MB
+        if (selectedFile.size > 50 * 1024 * 1024) {
+          return alert('File quá lớn! Vui lòng chọn file dưới 50 MB.');
+        }
+
+        // Làm sạch tên file để tránh lỗi ký tự đặc biệt
+        const safeName = selectedFile.name
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-zA-Z0-9._-]/g, '_');
+
+        const storagePath =
+          `${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`;
+
+        // Upload vào bucket post-images
+        const { error: uploadError } = await _supabase.storage
           .from('post-images')
-          .upload(storagePath, selectedFile);
+          .upload(storagePath, selectedFile, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: selectedFile.type || 'application/octet-stream'
+          });
 
-        if (error) return alert('Lỗi tải file lên: ' + error.message);
+        if (uploadError) {
+          console.error('SUPABASE STORAGE UPLOAD ERROR:', uploadError);
+          return alert(
+            'LỖI TẢI FILE LÊN!\n\n' +
+            'Mã lỗi: ' + (uploadError.statusCode || 'không có') + '\n' +
+            'Chi tiết: ' + (uploadError.message || uploadError.error || 'Không xác định') +
+            '\n\nKiểm tra bucket "post-images" và policy INSERT trong Supabase.'
+          );
+        }
 
-        const { data: publicUrlData } = _supabase.storage.from('post-images').getPublicUrl(storagePath);
+        const { data: publicUrlData } = _supabase.storage
+          .from('post-images')
+          .getPublicUrl(storagePath);
+
+        if (!publicUrlData || !publicUrlData.publicUrl) {
+          return alert('Upload thành công nhưng không lấy được đường dẫn file.');
+        }
+
         fileUrl = publicUrlData.publicUrl;
       }
 
@@ -236,7 +268,8 @@
         clearFile();
         loadPosts();
       } else {
-        alert('Lỗi đăng bài!');
+        console.error('POST INSERT ERROR:', error);
+        alert('Lỗi đăng bài: ' + (error.message || 'Không xác định'));
       }
     }
 
