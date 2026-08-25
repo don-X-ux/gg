@@ -255,11 +255,10 @@
     function sendQuickLike() { createPost("👍"); }
 
     async function loadPosts() {
-      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+      // Tải lại toàn bộ lịch sử trò chuyện (không còn lọc 6 tiếng)
       const { data, error } = await _supabase
         .from('posts')
         .select('*')
-        .gte('created_at', sixHoursAgo)
         .order('created_at', { ascending: true });
 
       if (error) return console.error(error);
@@ -282,9 +281,14 @@
           }
         }
 
+        // Kiểm tra điều kiện thời gian xóa (6 phút)
+        const postTime = new Date(post.created_at).getTime();
+        const minutesPassed = (Date.now() - postTime) / (1000 * 60);
+
         let actions = '';
-        if (isMine || isAdmin) {
-          actions += `<span class="action-btn" onclick="deletePost('${post.id}')" title="Xóa"><i class="fa-solid fa-trash"></i></span>`;
+        // Người gửi chỉ thấy nút xóa nếu chưa quá 6 phút; Admin luôn có quyền xóa
+        if ((isMine && minutesPassed <= 6) || isAdmin) {
+          actions += `<span class="action-btn" onclick="deletePost('${post.id}', '${post.created_at}')" title="Xóa"><i class="fa-solid fa-trash"></i></span>`;
         }
         if (isAdmin && post.user_name !== currentUser) {
           actions += `<span class="action-btn" onclick="blockUser('${post.user_name}')" title="Khóa người dùng"><i class="fa-solid fa-ban"></i></span>`;
@@ -354,7 +358,14 @@
       }
     }
 
-    async function deletePost(id) {
+    async function deletePost(id, createdAt) {
+      const postTime = new Date(createdAt).getTime();
+      const minutesPassed = (Date.now() - postTime) / (1000 * 60);
+
+      if (!isAdmin && minutesPassed > 6) {
+        return alert('Đã quá 6 phút! Bạn không thể xóa tin nhắn này nữa.');
+      }
+
       if (!confirm('Bạn có chắc muốn xóa tin nhắn này?')) return;
       await _supabase.from('posts').delete().eq('id', id);
       loadPosts();
