@@ -3,73 +3,100 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Trang Web Chia Sẻ Tạm Thời</title>
+  <title>Ứng Dụng Nhắn Tin Realtime</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f0f2f5; height: 100vh; display: flex; flex-direction: column; }
-    
-    /* Overlay Đăng nhập / Cài đặt */
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f0f2f5; height: 100vh; overflow: hidden; }
+
+    /* Overlay Đăng nhập & Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
     .modal { background: white; padding: 25px; border-radius: 8px; text-align: center; width: 340px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .modal h3 { margin-bottom: 12px; color: #1c1e21; }
     .modal input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; outline: none; }
     .modal button { width: 100%; padding: 10px; background: #0068ff; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-    
-    .chat-container { max-width: 800px; width: 100%; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; background: #e5efff; }
-    
-    /* Thanh Header người dùng */
-    .user-header { background: white; padding: 10px 15px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
-    .user-info { display: flex; align-items: center; gap: 10px; }
-    .user-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: #ddd; }
-    .user-name-text { font-weight: bold; color: #1c1e21; }
-    .header-btns button { background: none; border: none; font-size: 1.1rem; color: #5b6b7c; cursor: pointer; margin-left: 10px; }
-    .header-btns button:hover { color: #0068ff; }
-    .logout-btn:hover { color: #ff4d4f !important; }
 
-    /* Thanh Admin */
-    .admin-bar { background: #333; color: white; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85em; }
+    /* Khung ứng dụng chính Layout 2 Cột */
+    .app-container { display: flex; width: 100vw; height: 100vh; background: white; }
+
+    /* CỘT TRÁI: DANH SÁCH CHAT */
+    .sidebar { width: 320px; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; background: #fff; }
+    .sidebar-header { padding: 12px 15px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; background: #f7f9fa; }
+    .user-info { display: flex; align-items: center; gap: 10px; }
+    .user-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }
+    .user-name-text { font-weight: bold; font-size: 0.95em; color: #1c1e21; }
+    .sidebar-btns button { background: none; border: none; font-size: 1.1rem; color: #5b6b7c; cursor: pointer; margin-left: 8px; }
+
+    .search-box { padding: 10px 15px; border-bottom: 1px solid #f0f0f0; }
+    .search-box input { width: 100%; padding: 8px 12px; border: 1px solid #e0e0e0; border-radius: 20px; outline: none; font-size: 0.85em; background: #f0f2f5; }
+
+    .chat-list { flex: 1; overflow-y: auto; }
+    .chat-item { display: flex; align-items: center; gap: 12px; padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #f9f9f9; transition: background 0.2s; }
+    .chat-item:hover, .chat-item.active { background: #e5efff; }
+    .chat-item-icon { width: 40px; height: 40px; border-radius: 50%; background: #0068ff; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; }
+    .chat-item-details { flex: 1; }
+    .chat-item-title { font-weight: bold; font-size: 0.9em; color: #1c1e21; }
+    .chat-item-sub { font-size: 0.75em; color: #888; margin-top: 2px; }
+
+    /* CỘT PHẢI: KHUNG CHAT CHÍNH */
+    .main-chat { flex: 1; display: flex; flex-direction: column; background: #e5efff; }
+    .chat-header { background: white; padding: 12px 20px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+    .current-room-name { font-weight: bold; font-size: 1.05em; color: #1c1e21; }
+    
+    .admin-bar { background: #333; color: white; padding: 6px 15px; display: flex; justify-content: space-between; align-items: center; font-size: 0.8em; }
     .admin-bar button { background: #ff4d4f; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-left: 5px; }
 
-    /* Khung chat */
     .chat-feed { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-    .post { background: white; padding: 10px 14px; border-radius: 8px; max-width: 75%; width: fit-content; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; gap: 10px; }
+    .post { background: white; padding: 10px 14px; border-radius: 8px; max-width: 70%; width: fit-content; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; gap: 10px; }
     .post.mine { align-self: flex-end; background: #e3f2fd; flex-direction: row-reverse; }
     .post-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
     .post-body { flex: 1; }
     .post-header { font-size: 0.8em; font-weight: bold; color: #0068ff; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 15px; }
     .post-content { font-size: 0.95em; color: #1c1e21; word-break: break-word; white-space: pre-wrap; }
     .post-time { font-size: 0.7em; color: #888; text-align: right; margin-top: 4px; }
-    
     .post-img { max-width: 100%; max-height: 250px; border-radius: 6px; margin-top: 6px; }
     .file-attachment { display: flex; align-items: center; gap: 10px; background: #f0f2f5; padding: 8px 12px; border-radius: 6px; margin-top: 6px; text-decoration: none; color: #0068ff; font-weight: bold; font-size: 0.9em; word-break: break-all; }
     .action-btn { color: #ff4d4f; cursor: pointer; font-size: 0.8em; margin-left: 5px; }
 
-    /* Input chat */
+    /* Thanh nhập tin nhắn */
     .input-box { background: white; border-top: 1px solid #e0e0e0; display: flex; flex-direction: column; }
     .toolbar { display: flex; align-items: center; padding: 8px 12px; gap: 16px; color: #5b6b7c; font-size: 1.1rem; border-bottom: 1px solid #f0f0f0; }
     .toolbar i { cursor: pointer; }
     .toolbar i:hover { color: #0068ff; }
-    
     .input-area { display: flex; align-items: center; padding: 10px 12px; gap: 10px; }
     .input-area input[type="text"] { flex: 1; border: none; outline: none; font-size: 0.95em; }
     #file-preview { display: none; padding: 6px 12px; background: #f5f5f5; font-size: 0.85em; justify-content: space-between; }
+
+    /* Responsive Điện Thoại */
+    @media (max-width: 768px) {
+      .sidebar { width: 100%; display: flex; }
+      .main-chat { display: none; width: 100%; }
+      .app-container.mobile-chat-open .sidebar { display: none; }
+      .app-container.mobile-chat-open .main-chat { display: flex; }
+    }
   </style>
 </head>
 <body>
 
-  <!-- Modal Đăng nhập Khách / Admin -->
+  <!-- Modal Đăng nhập / Đăng ký Auth -->
   <div id="login-modal" class="modal-overlay">
     <div class="modal">
-      <h3>Đăng Nhập Chat</h3>
-      <input type="text" id="username-input" placeholder="Nhập tên hiển thị...">
-      <input type="password" id="admin-pass-input" placeholder="Mật khẩu Admin (Để trống nếu là Khách)">
-      <button onclick="login()">Vào Chat</button>
+      <h3 id="modal-title">Đăng Nhập Tài Khoản</h3>
+      <input type="email" id="auth-email" placeholder="Nhập Email của bạn...">
+      <input type="password" id="auth-password" placeholder="Nhập Mật khẩu...">
+      <input type="text" id="auth-username" placeholder="Tên hiển thị (Bắt buộc khi Đăng ký)..." style="display: none;">
+      <input type="password" id="admin-pass-input" placeholder="Mật khẩu Admin (Nếu có)">
+      
+      <button id="btn-submit" onclick="handleAuth()">Đăng Nhập</button>
+      
+      <button onclick="toggleAuthMode()" style="background: none; color: #0068ff; margin-top: 12px; font-size: 0.85em; text-decoration: underline; border: none; cursor: pointer;">
+        <span id="toggle-text">Chưa có tài khoản? Đăng ký ngay</span>
+      </button>
     </div>
   </div>
 
-  <!-- Modal Chỉnh sửa Trang cá nhân (Tên & Avatar) -->
+  <!-- Modal Hồ sơ -->
   <div id="profile-modal" class="modal-overlay" style="display: none;">
     <div class="modal">
       <h3>Chỉnh Sửa Hồ Sơ</h3>
@@ -81,46 +108,66 @@
     </div>
   </div>
 
-  <div class="chat-container">
-    <!-- Thanh hiển thị User & Nút chức năng -->
-    <div class="user-header">
-      <div class="user-info">
-        <img id="header-user-avatar" src="https://via.placeholder.com/40" class="user-avatar">
-        <span id="header-user-name" class="user-name-text">...</span>
+  <div class="app-container" id="app-container">
+    <!-- CỘT 1: SIDEBAR QUẢN LÝ PHÒNG CHAT -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="user-info">
+          <img id="header-user-avatar" src="https://via.placeholder.com/40" class="user-avatar">
+          <span id="header-user-name" class="user-name-text">...</span>
+        </div>
+        <div class="sidebar-btns">
+          <button onclick="createNewRoom()" title="Tạo phòng chat mới"><i class="fa-solid fa-plus"></i></button>
+          <button onclick="openProfileModal()" title="Hồ sơ"><i class="fa-solid fa-user-pen"></i></button>
+          <button onclick="logout()" style="color:#ff4d4f" title="Đăng xuất"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
       </div>
-      <div class="header-btns">
-        <button onclick="openProfileModal()" title="Sửa tên / Avatar"><i class="fa-solid fa-user-pen"></i></button>
-        <button class="logout-btn" onclick="logout()" title="Đăng xuất"><i class="fa-solid fa-right-from-bracket"></i></button>
+
+      <div class="search-box">
+        <input type="text" id="search-room-input" placeholder="Tìm kiếm phòng chat..." oninput="filterRooms()">
+      </div>
+
+      <div class="chat-list" id="rooms-list">
+        <!-- Danh sách phòng chat render ở đây -->
       </div>
     </div>
 
-    <!-- Thanh Admin -->
-    <div id="admin-panel" class="admin-bar" style="display: none;">
-      <span><i class="fa-solid fa-user-shield"></i> Quyền Quản Trị Viên</span>
-      <div>
-        <button onclick="adminDeleteAll()"><i class="fa-solid fa-trash"></i> Xóa tất cả</button>
-        <button onclick="adminDeleteByUser()"><i class="fa-solid fa-user-minus"></i> Xóa theo Tên</button>
+    <!-- CỘT 2: KHUNG CHAT PHẢI -->
+    <div class="main-chat">
+      <div class="chat-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button onclick="backToSidebar()" style="background:none; border:none; font-size:1.2rem; cursor:pointer;" class="mobile-back-btn">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <span class="current-room-name" id="current-room-title">Phòng Chat Chung</span>
+        </div>
       </div>
-    </div>
 
-    <!-- Khung tin nhắn -->
-    <div class="chat-feed" id="posts-feed">Đang tải dữ liệu...</div>
-
-    <div id="file-preview">
-      <span id="file-name-display"></span>
-      <i class="fa-solid fa-xmark" onclick="clearFile()" style="cursor:pointer; color:red;"></i>
-    </div>
-
-    <!-- Khung nhập tin nhắn -->
-    <div class="input-box">
-      <div class="toolbar">
-        <i class="fa-regular fa-image" onclick="triggerFileInput('image/*')" title="Gửi ảnh"></i>
-        <i class="fa-solid fa-paperclip" onclick="triggerFileInput('*')" title="Gửi file"></i>
+      <div id="admin-panel" class="admin-bar" style="display: none;">
+        <span><i class="fa-solid fa-user-shield"></i> Admin Panel</span>
+        <div>
+          <button onclick="adminDeleteAll()"><i class="fa-solid fa-trash"></i> Xóa tất cả</button>
+          <button onclick="adminDeleteByUser()"><i class="fa-solid fa-user-minus"></i> Xóa theo Tên</button>
+        </div>
       </div>
-      <div class="input-area">
-        <input type="text" id="post-content" placeholder="Nhập tin nhắn..." onkeypress="handleKeyPress(event)">
-        <input type="file" id="hidden-file-input" style="display: none;" onchange="handleFileSelect(event)">
-        <i class="fa-solid fa-thumbs-up" style="color: #faad14; cursor: pointer; font-size: 1.2rem;" onclick="sendQuickLike()"></i>
+
+      <div class="chat-feed" id="posts-feed">Đang tải dữ liệu...</div>
+
+      <div id="file-preview">
+        <span id="file-name-display"></span>
+        <i class="fa-solid fa-xmark" onclick="clearFile()" style="cursor:pointer; color:red;"></i>
+      </div>
+
+      <div class="input-box">
+        <div class="toolbar">
+          <i class="fa-regular fa-image" onclick="triggerFileInput('image/*')" title="Gửi ảnh"></i>
+          <i class="fa-solid fa-paperclip" onclick="triggerFileInput('*')" title="Gửi file"></i>
+        </div>
+        <div class="input-area">
+          <input type="text" id="post-content" placeholder="Nhập tin nhắn..." onkeypress="handleKeyPress(event)">
+          <input type="file" id="hidden-file-input" style="display: none;" onchange="handleFileSelect(event)">
+          <i class="fa-solid fa-thumbs-up" style="color: #faad14; cursor: pointer; font-size: 1.2rem;" onclick="sendQuickLike()"></i>
+        </div>
       </div>
     </div>
   </div>
@@ -136,13 +183,30 @@
     let isAdmin = false;
     let selectedFile = null;
     let tempAvatarFile = null;
+    let currentRoomId = '00000000-0000-0000-0000-000000000001';
+    let allRooms = [];
+    let isSignUpMode = false;
 
-    window.onload = () => {
+    window.onload = async () => {
+      // Kiểm tra phiên làm việc từ Supabase Auth
+      const { data: { session } } = await _supabase.auth.getSession();
       const savedUser = localStorage.getItem('chat_username');
       const savedAvatar = localStorage.getItem('chat_avatar');
       const savedIsAdmin = localStorage.getItem('chat_is_admin');
 
-      if (savedUser) {
+      if (session && session.user) {
+        currentUser = session.user.user_metadata.display_name || session.user.email.split('@')[0];
+        currentAvatar = session.user.user_metadata.avatar_url || currentAvatar;
+        
+        if (savedIsAdmin === 'true') {
+          isAdmin = true;
+          document.getElementById('admin-panel').style.display = 'flex';
+        }
+        updateHeaderUI();
+        document.getElementById('login-modal').style.display = 'none';
+        loadRooms();
+        loadPosts();
+      } else if (savedUser) {
         currentUser = savedUser;
         if (savedAvatar) currentAvatar = savedAvatar;
         if (savedIsAdmin === 'true') {
@@ -151,35 +215,77 @@
         }
         updateHeaderUI();
         document.getElementById('login-modal').style.display = 'none';
+        loadRooms();
         loadPosts();
       }
     };
 
-    function login() {
-      const name = document.getElementById('username-input').value.trim();
-      const pass = document.getElementById('admin-pass-input').value.trim();
-
-      if (!name) return alert('Vui lòng nhập tên!');
-
-      currentUser = name;
-      currentAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`;
-      
-      if (pass === ADMIN_PASSWORD) {
-        isAdmin = true;
-        document.getElementById('admin-panel').style.display = 'flex';
-      }
-
-      localStorage.setItem('chat_username', currentUser);
-      localStorage.setItem('chat_avatar', currentAvatar);
-      localStorage.setItem('chat_is_admin', isAdmin);
-
-      updateHeaderUI();
-      document.getElementById('login-modal').style.display = 'none';
-      loadPosts();
+    /* XỬ LÝ AUTHENTICATION (ĐĂNG KÝ / ĐĂNG NHẬP) */
+    function toggleAuthMode() {
+      isSignUpMode = !isSignUpMode;
+      document.getElementById('modal-title').innerText = isSignUpMode ? 'Đăng Ký Tài Khoản' : 'Đăng Nhập Tài Khoản';
+      document.getElementById('btn-submit').innerText = isSignUpMode ? 'Đăng Ký' : 'Đăng Nhập';
+      document.getElementById('auth-username').style.display = isSignUpMode ? 'block' : 'none';
+      document.getElementById('toggle-text').innerText = isSignUpMode ? 'Đã có tài khoản? Đăng nhập ngay' : 'Chưa có tài khoản? Đăng ký ngay';
     }
 
-    function logout() {
+    async function handleAuth() {
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value.trim();
+      const username = document.getElementById('auth-username').value.trim();
+      const passAdmin = document.getElementById('admin-pass-input').value.trim();
+
+      if (!email || !password) return alert('Vui lòng nhập Email và Mật khẩu!');
+
+      if (passAdmin === ADMIN_PASSWORD) {
+        isAdmin = true;
+        document.getElementById('admin-panel').style.display = 'flex';
+        localStorage.setItem('chat_is_admin', true);
+      }
+
+      if (isSignUpMode) {
+        if (!username) return alert('Vui lòng nhập Tên hiển thị!');
+
+        const { data, error } = await _supabase.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: {
+              display_name: username,
+              avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}`
+            }
+          }
+        });
+
+        if (error) return alert('Lỗi đăng ký: ' + error.message);
+        alert('Đăng ký thành công! Hãy bấm Đăng nhập.');
+        toggleAuthMode();
+
+      } else {
+        const { data, error } = await _supabase.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+
+        if (error) return alert('Lỗi đăng nhập: ' + error.message);
+
+        const user = data.user;
+        currentUser = user.user_metadata.display_name || user.email.split('@')[0];
+        currentAvatar = user.user_metadata.avatar_url || currentAvatar;
+
+        localStorage.setItem('chat_username', currentUser);
+        localStorage.setItem('chat_avatar', currentAvatar);
+
+        updateHeaderUI();
+        document.getElementById('login-modal').style.display = 'none';
+        loadRooms();
+        loadPosts();
+      }
+    }
+
+    async function logout() {
       if (!confirm('Bạn có chắc muốn đăng xuất?')) return;
+      await _supabase.auth.signOut();
       localStorage.clear();
       location.reload();
     }
@@ -189,76 +295,75 @@
       document.getElementById('header-user-avatar').src = currentAvatar;
     }
 
-    function openProfileModal() {
-      document.getElementById('edit-username-input').value = currentUser;
-      document.getElementById('edit-avatar-preview').src = currentAvatar;
-      document.getElementById('profile-modal').style.display = 'flex';
+    /* QUẢN LÝ PHÒNG CHAT */
+    async function loadRooms() {
+      const { data, error } = await _supabase.from('conversations').select('*').order('created_at', { ascending: true });
+      if (error) return console.error(error);
+
+      allRooms = data || [];
+      renderRooms(allRooms);
     }
 
-    function closeProfileModal() {
-      tempAvatarFile = null;
-      document.getElementById('profile-modal').style.display = 'none';
+    function renderRooms(rooms) {
+      const roomsContainer = document.getElementById('rooms-list');
+      roomsContainer.innerHTML = '';
+
+      rooms.forEach(room => {
+        const item = document.createElement('div');
+        item.className = `chat-item ${room.id === currentRoomId ? 'active' : ''}`;
+        item.onclick = () => selectRoom(room.id, room.name);
+
+        item.innerHTML = `
+          <div class="chat-item-icon"><i class="fa-solid fa-users"></i></div>
+          <div class="chat-item-details">
+            <div class="chat-item-title">${escapeHtml(room.name)}</div>
+            <div class="chat-item-sub">Bấm để xem tin nhắn</div>
+          </div>
+        `;
+        roomsContainer.appendChild(item);
+      });
     }
 
-    function previewAvatar(e) {
-      if (e.target.files.length > 0) {
-        tempAvatarFile = e.target.files[0];
-        document.getElementById('edit-avatar-preview').src = URL.createObjectURL(tempAvatarFile);
+    function filterRooms() {
+      const query = document.getElementById('search-room-input').value.toLowerCase();
+      const filtered = allRooms.filter(r => r.name.toLowerCase().includes(query));
+      renderRooms(filtered);
+    }
+
+    async function createNewRoom() {
+      const roomName = prompt("Nhập tên phòng chat mới:");
+      if (!roomName) return;
+
+      const { data, error } = await _supabase.from('conversations').insert([
+        { name: roomName.trim(), is_group: true }
+      ]).select();
+
+      if (!error && data.length > 0) {
+        loadRooms();
+        selectRoom(data[0].id, data[0].name);
+      } else {
+        alert("Lỗi khi tạo phòng chat!");
       }
     }
 
-    async function saveProfile() {
-      const newName = document.getElementById('edit-username-input').value.trim();
-      if (!newName) return alert('Tên không được để trống!');
-
-      if (tempAvatarFile) {
-        const cleanFileName = tempAvatarFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const path = `avatars/${Date.now()}_${cleanFileName}`;
-        
-        const { error } = await _supabase.storage.from('post-images').upload(path, tempAvatarFile);
-        if (error) return alert('Lỗi tải avatar: ' + error.message);
-        
-        const { data } = _supabase.storage.from('post-images').getPublicUrl(path);
-        currentAvatar = data.publicUrl;
-      }
-
-      currentUser = newName;
-      localStorage.setItem('chat_username', currentUser);
-      localStorage.setItem('chat_avatar', currentAvatar);
-
-      updateHeaderUI();
-      closeProfileModal();
+    function selectRoom(roomId, roomName) {
+      currentRoomId = roomId;
+      document.getElementById('current-room-title').innerText = roomName;
+      document.getElementById('app-container').classList.add('mobile-chat-open');
+      loadRooms();
       loadPosts();
     }
 
-    function triggerFileInput(acceptType) {
-      const fileInput = document.getElementById('hidden-file-input');
-      fileInput.accept = acceptType;
-      fileInput.click();
+    function backToSidebar() {
+      document.getElementById('app-container').classList.remove('mobile-chat-open');
     }
 
-    function handleFileSelect(event) {
-      if (event.target.files.length > 0) {
-        selectedFile = event.target.files[0];
-        document.getElementById('file-name-display').innerText = 'File đã chọn: ' + selectedFile.name;
-        document.getElementById('file-preview').style.display = 'flex';
-      }
-    }
-
-    function clearFile() {
-      selectedFile = null;
-      document.getElementById('hidden-file-input').value = '';
-      document.getElementById('file-preview').style.display = 'none';
-    }
-
-    function handleKeyPress(e) { if (e.key === 'Enter') createPost(); }
-    function sendQuickLike() { createPost("👍"); }
-
+    /* TẢI & GỬI TIN NHẮN */
     async function loadPosts() {
-      // Tải lại toàn bộ lịch sử trò chuyện (không còn lọc 6 tiếng)
       const { data, error } = await _supabase
         .from('posts')
         .select('*')
+        .eq('conversation_id', currentRoomId)
         .order('created_at', { ascending: true });
 
       if (error) return console.error(error);
@@ -281,12 +386,10 @@
           }
         }
 
-        // Kiểm tra điều kiện thời gian xóa (6 phút)
         const postTime = new Date(post.created_at).getTime();
         const minutesPassed = (Date.now() - postTime) / (1000 * 60);
 
         let actions = '';
-        // Người gửi chỉ thấy nút xóa nếu chưa quá 6 phút; Admin luôn có quyền xóa
         if ((isMine && minutesPassed <= 6) || isAdmin) {
           actions += `<span class="action-btn" onclick="deletePost('${post.id}', '${post.created_at}')" title="Xóa"><i class="fa-solid fa-trash"></i></span>`;
         }
@@ -346,7 +449,14 @@
       }
 
       const { error } = await _supabase.from('posts').insert([
-        { user_name: currentUser, content: content, image_url: fileUrl, file_name: fileName, avatar_url: currentAvatar }
+        { 
+          user_name: currentUser, 
+          content: content, 
+          image_url: fileUrl, 
+          file_name: fileName, 
+          avatar_url: currentAvatar,
+          conversation_id: currentRoomId
+        }
       ]);
 
       if (!error) {
@@ -357,6 +467,76 @@
         alert('Lỗi gửi tin nhắn!');
       }
     }
+
+    /* HỒ SƠ VÀ FILE */
+    function openProfileModal() {
+      document.getElementById('edit-username-input').value = currentUser;
+      document.getElementById('edit-avatar-preview').src = currentAvatar;
+      document.getElementById('profile-modal').style.display = 'flex';
+    }
+
+    function closeProfileModal() {
+      tempAvatarFile = null;
+      document.getElementById('profile-modal').style.display = 'none';
+    }
+
+    function previewAvatar(e) {
+      if (e.target.files.length > 0) {
+        tempAvatarFile = e.target.files[0];
+        document.getElementById('edit-avatar-preview').src = URL.createObjectURL(tempAvatarFile);
+      }
+    }
+
+    async function saveProfile() {
+      const newName = document.getElementById('edit-username-input').value.trim();
+      if (!newName) return alert('Tên không được để trống!');
+
+      if (tempAvatarFile) {
+        const cleanFileName = tempAvatarFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const path = `avatars/${Date.now()}_${cleanFileName}`;
+        const { error } = await _supabase.storage.from('post-images').upload(path, tempAvatarFile);
+        if (error) return alert('Lỗi tải avatar: ' + error.message);
+        
+        const { data } = _supabase.storage.from('post-images').getPublicUrl(path);
+        currentAvatar = data.publicUrl;
+      }
+
+      currentUser = newName;
+      localStorage.setItem('chat_username', currentUser);
+      localStorage.setItem('chat_avatar', currentAvatar);
+
+      // Cập nhật thông tin User Metadata trên Supabase Auth
+      await _supabase.auth.updateUser({
+        data: { display_name: currentUser, avatar_url: currentAvatar }
+      });
+
+      updateHeaderUI();
+      closeProfileModal();
+      loadPosts();
+    }
+
+    function triggerFileInput(acceptType) {
+      const fileInput = document.getElementById('hidden-file-input');
+      fileInput.accept = acceptType;
+      fileInput.click();
+    }
+
+    function handleFileSelect(event) {
+      if (event.target.files.length > 0) {
+        selectedFile = event.target.files[0];
+        document.getElementById('file-name-display').innerText = 'File đã chọn: ' + selectedFile.name;
+        document.getElementById('file-preview').style.display = 'flex';
+      }
+    }
+
+    function clearFile() {
+      selectedFile = null;
+      document.getElementById('hidden-file-input').value = '';
+      document.getElementById('file-preview').style.display = 'none';
+    }
+
+    function handleKeyPress(e) { if (e.key === 'Enter') createPost(); }
+    function sendQuickLike() { createPost("👍"); }
 
     async function deletePost(id, createdAt) {
       const postTime = new Date(createdAt).getTime();
@@ -376,28 +556,21 @@
       if (!hours || isNaN(hours)) return;
 
       const blockedUntil = new Date(Date.now() + parseFloat(hours) * 60 * 60 * 1000).toISOString();
-
-      const { error } = await _supabase.from('blocked_users').upsert([
-        { user_name: targetUser, blocked_until: blockedUntil }
-      ], { onConflict: 'user_name' });
-
-      if (!error) alert(`Đã cấm [${targetUser}] chat trong ${hours} giờ!`);
-      else alert('Lỗi khóa tài khoản!');
+      await _supabase.from('blocked_users').upsert([{ user_name: targetUser, blocked_until: blockedUntil }], { onConflict: 'user_name' });
+      alert(`Đã cấm [${targetUser}] chat trong ${hours} giờ!`);
     }
 
     async function adminDeleteAll() {
-      if (!confirm('CẢNH BÁO: Xóa tất cả tin nhắn hệ thống?')) return;
-      await _supabase.from('posts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (!confirm('Xóa toàn bộ tin nhắn trong phòng chat này?')) return;
+      await _supabase.from('posts').delete().eq('conversation_id', currentRoomId);
       loadPosts();
     }
 
     async function adminDeleteByUser() {
-      const targetUser = prompt("Nhập Tên người dùng cần xóa sạch tin nhắn:");
+      const targetUser = prompt("Nhập Tên người dùng cần xóa sạch tin nhắn trong phòng:");
       if (!targetUser) return;
-      if (confirm(`Xóa tất cả tin nhắn của [${targetUser}]?`)) {
-        await _supabase.from('posts').delete().eq('user_name', targetUser);
-        loadPosts();
-      }
+      await _supabase.from('posts').delete().eq('conversation_id', currentRoomId).eq('user_name', targetUser);
+      loadPosts();
     }
 
     function escapeHtml(text) {
