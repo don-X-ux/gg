@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trang Web Chia Sẻ Tạm Thời</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f0f2f5; height: 100vh; display: flex; flex-direction: column; }
+    
+    /* Overlay bắt buộc nhập tên */
+    #modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000;
+    }
+    .modal { background: white; padding: 25px; border-radius: 8px; text-align: center; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .modal h3 { margin-bottom: 10px; color: #1c1e21; }
+    .modal input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 4px; outline: none; }
+    .modal button { width: 100%; padding: 10px; background: #0068ff; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+    
+    /* Khung chat chính */
+    .chat-container { max-width: 800px; width: 100%; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; background: #e5efff; }
+    
+    /* Feed hiển thị tin nhắn */
+    .chat-feed { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    .post { background: white; padding: 10px 14px; border-radius: 8px; max-width: 70%; width: fit-content; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .post.mine { align-self: flex-end; background: #e3f2fd; }
+    .post-header { font-size: 0.8em; font-weight: bold; color: #0068ff; margin-bottom: 4px; }
+    .post-content { font-size: 0.95em; color: #1c1e21; word-break: break-word; white-word: pre-wrap; }
+    .post-time { font-size: 0.7em; color: #888; text-align: right; margin-top: 4px; }
+    
+    /* Khung hiển thị đính kèm */
+    .post-img { max-width: 100%; max-height: 250px; border-radius: 6px; margin-top: 6px; }
+    .file-attachment { display: flex; align-items: center; gap: 10px; background: #f0f2f5; padding: 8px 12px; border-radius: 6px; margin-top: 6px; text-decoration: none; color: #0068ff; font-weight: bold; font-size: 0.9em; }
+    .delete-btn { color: #ff4d4f; cursor: pointer; margin-left: 8px; font-size: 0.8em; }
+
+    /* Thanh công cụ nhập tin nhắn chuẩn Zalo */
+    .input-box { background: white; border-top: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+    .toolbar { display: flex; align-items: center; padding: 8px 12px; gap: 16px; color: #5b6b7c; font-size: 1.1rem; border-bottom: 1px solid #f0f0f0; }
+    .toolbar i { cursor: pointer; transition: color 0.2s; }
+    .toolbar i:hover { color: #0068ff; }
+    
+    .input-area { display: flex; align-items: center; padding: 10px 12px; gap: 10px; }
+    .input-area input[type="text"] { flex: 1; border: none; outline: none; font-size: 0.95em; color: #1c1e21; }
+    .input-actions { display: flex; align-items: center; gap: 12px; color: #5b6b7c; font-size: 1.2rem; }
+    .input-actions i { cursor: pointer; }
+    .thumbs-up { color: #faad14; }
+
+    /* File preview nhỏ khi chọn file */
+    #file-preview { display: none; padding: 6px 12px; background: #f5f5f5; font-size: 0.85em; color: #555; align-items: center; justify-content: space-between; border-bottom: 1px solid #eee; }
+  </style>
+</head>
+<body>
+
+  <!-- Modal bắt buộc nhập tên -->
+  <div id="modal-overlay">
+    <div class="modal">
+      <h3>Xác nhận tên</h3>
+      <p>Vui lòng nhập tên của bạn để tiếp tục:</p>
+      <input type="text" id="username-input" placeholder="Tên của bạn...">
+      <button onclick="saveName()">Vào Chat</button>
+    </div>
+  </div>
+
+  <div class="chat-container">
+    <!-- Khung tin nhắn -->
+    <div class="chat-feed" id="posts-feed">Đang tải dữ liệu...</div>
+
+    <!-- Thanh xem trước file chọn -->
+    <div id="file-preview">
+      <span id="file-name-display"></span>
+      <i class="fa-solid fa-xmark" onclick="clearFile()" style="cursor:pointer; color:red;"></i>
+    </div>
+
+    <!-- Khung nhập theo giao diện Zalo -->
+    <div class="input-box">
+      <!-- Icon bar phía trên -->
+      <div class="toolbar">
+        <i class="fa-regular fa-face-smile" title="Sticker/Emoji"></i>
+        <i class="fa-regular fa-image" onclick="triggerFileInput('image/*')" title="Gửi ảnh"></i>
+        <i class="fa-solid fa-paperclip" onclick="triggerFileInput('*')" title="Gửi file (.py, .pdf, .zip...)"></i>
+        <i class="fa-regular fa-id-card" title="Danh thiếp"></i>
+        <i class="fa-solid fa-crop-simple" title="Chụp màn hình"></i>
+        <i class="fa-solid fa-font" title="Định dạng"></i>
+        <i class="fa-regular fa-comment-dots" title="Tin nhắn mẫu"></i>
+        <i class="fa-regular fa-credit-card" title="Chuyển tiền"></i>
+        <i class="fa-solid fa-ellipsis" title="Thêm"></i>
+      </div>
+
+      <!-- Ô nhập liệu phía dưới -->
+      <div class="input-area">
+        <input type="text" id="post-content" placeholder="Nhập @, tin nhắn..." onkeypress="handleKeyPress(event)">
+        <input type="file" id="hidden-file-input" style="display: none;" onchange="handleFileSelect(event)">
+        <div class="input-actions">
+          <i class="fa-regular fa-face-smile"></i>
+          <i class="fa-solid fa-thumbs-up thumbs-up" onclick="sendQuickLike()"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://zdpuezgxfteptcfvzbns.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkcHVlemd4ZnRlcHRjZnZ6Ym5zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2Mjc1OTMsImV4cCI6MjEwMzIwMzU5M30.Zmw-gxRwsWycbz1FZYuGx8LcxoSZyyDh-MWsqk2gL7E';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentUser = '';
+    let selectedFile = null;
+
+    window.onload = () => {
+      const savedName = localStorage.getItem('chat_username');
+      if (savedName) {
+        currentUser = savedName;
+        document.getElementById('modal-overlay').style.display = 'none';
+        loadPosts();
+      }
+    };
+
+    function saveName() {
+      const name = document.getElementById('username-input').value.trim();
+      if (!name) return alert('Vui lòng nhập tên!');
+      localStorage.setItem('chat_username', name);
+      currentUser = name;
+      document.getElementById('modal-overlay').style.display = 'none';
+      loadPosts();
+    }
+
+    function triggerFileInput(acceptType) {
+      const fileInput = document.getElementById('hidden-file-input');
+      fileInput.accept = acceptType;
+      fileInput.click();
+    }
+
+    function handleFileSelect(event) {
+      if (event.target.files.length > 0) {
+        selectedFile = event.target.files[0];
+        document.getElementById('file-name-display').innerText = 'Đã chọn file: ' + selectedFile.name;
+        document.getElementById('file-preview').style.display = 'flex';
+      }
+    }
+
+    function clearFile() {
+      selectedFile = null;
+      document.getElementById('hidden-file-input').value = '';
+      document.getElementById('file-preview').style.display = 'none';
+    }
+
+    function handleKeyPress(e) {
+      if (e.key === 'Enter') {
+        createPost();
+      }
+    }
+
+    function sendQuickLike() {
+      createPost("👍");
+    }
+
+    async function loadPosts() {
+      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await _supabase
+        .from('posts')
+        .select('*')
+        .gte('created_at', sixHoursAgo)
+        .order('created_at', { ascending: true });
+
+      if (error) return console.error(error);
+
+      const feed = document.getElementById('posts-feed');
+      feed.innerHTML = '';
+
+      data.forEach(post => {
+        const isMine = post.user_name === currentUser;
+        const postEl = document.createElement('div');
+        postEl.className = `post ${isMine ? 'mine' : ''}`;
+
+        let mediaHtml = '';
+        if (post.image_url) {
+          // Kiểm tra xem file có phải hình ảnh không
+          const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(post.file_name || post.image_url);
+          if (isImage) {
+            mediaHtml = `<img class="post-img" src="${post.image_url}" />`;
+          } else {
+            mediaHtml = `
+              <a class="file-attachment" href="${post.image_url}" target="_blank" download="${post.file_name || 'file'}">
+                <i class="fa-solid fa-file-code"></i> ${escapeHtml(post.file_name || 'Tải file xuống')}
+              </a>`;
+          }
+        }
+
+        const deleteBtn = isMine ? `<span class="delete-btn" onclick="deletePost('${post.id}')"><i class="fa-solid fa-trash"></i></span>` : '';
+
+        postEl.innerHTML = `
+          <div class="post-header">${escapeHtml(post.user_name)} ${deleteBtn}</div>
+          ${post.content ? `<div class="post-content">${escapeHtml(post.content)}</div>` : ''}
+          ${mediaHtml}
+          <div class="post-time">${new Date(post.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+        `;
+        feed.appendChild(postEl);
+      });
+
+      // Tự động cuộn xuống tin nhắn mới nhất
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    async function createPost(overrideContent = null) {
+      const contentInput = document.getElementById('post-content');
+      const content = overrideContent !== null ? overrideContent : contentInput.value.trim();
+      let fileUrl = null;
+      let fileName = null;
+
+      if (!content && !selectedFile) return;
+
+      if (selectedFile) {
+        fileName = selectedFile.name;
+        // Đặt tên file ngẫu nhiên trên Storage để tránh trùng lặp
+        const storagePath = `${Date.now()}_${selectedFile.name}`;
+        
+        const { data, error } = await _supabase.storage
+          .from('post-images')
+          .upload(storagePath, selectedFile);
+
+        if (error) return alert('Lỗi tải file lên: ' + error.message);
+
+        const { data: publicUrlData } = _supabase.storage.from('post-images').getPublicUrl(storagePath);
+        fileUrl = publicUrlData.publicUrl;
+      }
+
+      const { error } = await _supabase.from('posts').insert([
+        { user_name: currentUser, content: content, image_url: fileUrl, file_name: fileName }
+      ]);
+
+      if (!error) {
+        contentInput.value = '';
+        clearFile();
+        loadPosts();
+      } else {
+        alert('Lỗi đăng bài!');
+      }
+    }
+
+    async function deletePost(id) {
+      if (!confirm('Bạn có chắc muốn xóa tin nhắn này?')) return;
+      const { error } = await _supabase.from('posts').delete().eq('id', id);
+      if (!error) loadPosts();
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>
