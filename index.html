@@ -123,7 +123,7 @@
     <div class="modal">
       <h3 id="settings-room-header">Cài Đặt Phòng Chat</h3>
       
-      <!-- Khung cấu hình dành cho Trưởng Phòng -->
+      <!-- Khung cấu hình dành cho Trưởng Phòng / Admin -->
       <div id="host-settings-panel">
         <label>Tên phòng chat:</label>
         <input type="text" id="setting-room-name" placeholder="Tên phòng...">
@@ -260,6 +260,18 @@
       if (session && session.user) {
         currentUser = session.user.user_metadata.display_name || session.user.email.split('@')[0];
         currentAvatar = session.user.user_metadata.avatar_url || currentAvatar;
+        
+        // KIỂM TRA QUYỀN ADMIN TỪ BẢNG system_admins CHO GMAIL DÙNG DỊCH VỤ
+        const userEmail = session.user.email;
+        if (userEmail) {
+          const { data: adminCheck } = await _supabase.from('system_admins').select('*').eq('email', userEmail);
+          if (adminCheck && adminCheck.length > 0) {
+            isAdmin = true;
+            document.getElementById('admin-panel').style.display = 'flex';
+            localStorage.setItem('chat_is_admin', 'true');
+          }
+        }
+
         if (savedIsAdmin === 'true') { isAdmin = true; document.getElementById('admin-panel').style.display = 'flex'; }
         updateHeaderUI();
         document.getElementById('login-modal').style.display = 'none';
@@ -316,8 +328,18 @@
       } else {
         const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
         if (error) return alert('Lỗi: ' + error.message);
+        
         currentUser = data.user.user_metadata.display_name || email.split('@')[0];
         currentAvatar = data.user.user_metadata.avatar_url || currentAvatar;
+
+        // KIỂM TRA ADMIN THEO BẢNG
+        const { data: adminCheck } = await _supabase.from('system_admins').select('*').eq('email', email);
+        if (adminCheck && adminCheck.length > 0) {
+          isAdmin = true;
+          document.getElementById('admin-panel').style.display = 'flex';
+          localStorage.setItem('chat_is_admin', 'true');
+        }
+
         localStorage.setItem('chat_username', currentUser);
         localStorage.setItem('chat_avatar', currentAvatar);
         updateHeaderUI();
@@ -383,7 +405,7 @@
       if (!currentRoomObj) return;
 
       const isDefaultRoom = currentRoomObj.id === '00000000-0000-0000-0000-000000000001';
-      // Kiểm tra nếu là chủ phòng hoặc phòng chưa có thông tin chủ (cơ chế phòng cũ)
+      // TÀI KHOẢN ADMIN HOẶC TRƯỞNG PHÒNG ĐỀU CÓ QUYỀN SỬA/XÓA PHÒNG
       const isHost = currentRoomObj.creator_name === currentUser || isAdmin;
 
       document.getElementById('settings-room-header').innerText = `Cài Đặt: ${currentRoomObj.name}`;
@@ -409,7 +431,6 @@
           ${isDefaultRoom ? '<em>(Phòng chat chung hệ thống không thể chỉnh sửa)</em>' : ''}
         `;
 
-        // Nếu phòng chưa có chủ -> Cho phép nhận quyền làm chủ
         const claimBtn = document.getElementById('claim-host-btn');
         if (!currentRoomObj.creator_name && !isDefaultRoom) {
           claimBtn.style.display = 'block';
@@ -501,7 +522,6 @@
       const { data } = await _supabase.from('conversations').select('*').order('created_at', { ascending: true });
       allRooms = data || [];
       
-      // Tự động tìm lại đối tượng phòng hiện tại
       if (allRooms.length > 0) {
         const found = allRooms.find(r => r.id === currentRoomId);
         if (found) currentRoomObj = found;
@@ -555,7 +575,7 @@
 
     /* TRUY CẬP VÀ VÀO PHÒNG */
     function checkRoomAccess(room) {
-      if (room.creator_name === currentUser || !room.is_private) {
+      if (room.creator_name === currentUser || !room.is_private || isAdmin) {
         selectRoom(room);
       } else {
         const inputPin = prompt(`Phòng [${room.name}] là Riêng Tư.\nNhập Mã PIN để vào:`);
