@@ -241,6 +241,7 @@
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     let currentUser = '';
     let currentAvatar = 'https://api.dicebear.com/7.x/bottts/svg?seed=Guest';
+    let currentUserId = null;
     let isAdmin = false;
     let selectedFile = null;
     let tempAvatarFile = null;
@@ -253,16 +254,13 @@
 
     window.onload = async () => {
       const { data: { session } } = await _supabase.auth.getSession();
-      const savedUser = localStorage.getItem('chat_username');
-      const savedAvatar = localStorage.getItem('chat_avatar');
       const savedIsAdmin = localStorage.getItem('chat_is_admin');
 
       if (session && session.user) {
-        currentUser = session.user.user_metadata.display_name || session.user.email.split('@')[0];
-        currentAvatar = session.user.user_metadata.avatar_url || currentAvatar;
-        
-        // KIỂM TRA QUYỀN ADMIN TỪ BẢNG system_admins CHO GMAIL DÙNG DỊCH VỤ
+        currentUserId = session.user.id;
         const userEmail = session.user.email;
+
+        // KIỂM TRA QUYỀN ADMIN TỪ BẢNG system_admins
         if (userEmail) {
           const { data: adminCheck } = await _supabase.from('system_admins').select('*').eq('email', userEmail);
           if (adminCheck && adminCheck.length > 0) {
@@ -272,27 +270,37 @@
           }
         }
 
+        // ƯU TIÊN LẤY DỮ LIỆU TỪ BẢNG PROFILES TRÊN SUPABASE KHI F5
+        const { data: profile } = await _supabase.from('profiles').select('*').eq('user_id', currentUserId).single();
+        if (profile) {
+          currentUser = profile.user_name;
+          currentAvatar = profile.avatar_url || currentAvatar;
+        } else {
+          currentUser = session.user.user_metadata.display_name || userEmail.split('@')[0];
+          currentAvatar = session.user.user_metadata.avatar_url || currentAvatar;
+          await syncProfile();
+        }
+
         if (savedIsAdmin === 'true') { isAdmin = true; document.getElementById('admin-panel').style.display = 'flex'; }
         updateHeaderUI();
         document.getElementById('login-modal').style.display = 'none';
-        syncProfile();
         loadRooms();
         loadPosts();
-      } else if (savedUser) {
-        currentUser = savedUser;
-        if (savedAvatar) currentAvatar = savedAvatar;
-        if (savedIsAdmin === 'true') { isAdmin = true; document.getElementById('admin-panel').style.display = 'flex'; }
-        updateHeaderUI();
-        document.getElementById('login-modal').style.display = 'none';
-        loadRooms();
-        loadPosts();
+      } else {
+        document.getElementById('login-modal').style.display = 'flex';
       }
     };
 
     async function syncProfile() {
+      if (!currentUserId) return;
       await _supabase.from('profiles').upsert([
-        { user_name: currentUser, avatar_url: currentAvatar, updated_at: new Date().toISOString() }
-      ], { onConflict: 'user_name' });
+        { 
+          user_id: currentUserId,
+          user_name: currentUser, 
+          avatar_url: currentAvatar, 
+          updated_at: new Date().toISOString() 
+        }
+      ], { onConflict: 'user_id' });
     }
 
     /* AUTHENTICATION */
@@ -315,7 +323,7 @@
       if (passAdmin === ADMIN_PASSWORD) {
         isAdmin = true;
         document.getElementById('admin-panel').style.display = 'flex';
-        localStorage.setItem('chat_is_admin', true);
+        localStorage.setItem('chat_is_admin', 'true');
       }
 
       if (isSignUpMode) {
@@ -329,8 +337,17 @@
         const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
         if (error) return alert('Lỗi: ' + error.message);
         
-        currentUser = data.user.user_metadata.display_name || email.split('@')[0];
-        currentAvatar = data.user.user_metadata.avatar_url || currentAvatar;
+        currentUserId = data.user.id;
+
+        // KIỂM TRA HỒ SƠ SAU KHI ĐĂNG NHẬP
+        const { data: profile } = await _supabase.from('profiles').select('*').eq('user_id', currentUserId).single();
+        if (profile) {
+          currentUser = profile.user_name;
+          currentAvatar = profile.avatar_url;
+        } else {
+          currentUser = data.user.user_metadata.display_name || email.split('@')[0];
+          currentAvatar = data.user.user_metadata.avatar_url || currentAvatar;
+        }
 
         // KIỂM TRA ADMIN THEO BẢNG
         const { data: adminCheck } = await _supabase.from('system_admins').select('*').eq('email', email);
@@ -340,10 +357,8 @@
           localStorage.setItem('chat_is_admin', 'true');
         }
 
-        localStorage.setItem('chat_username', currentUser);
-        localStorage.setItem('chat_avatar', currentAvatar);
+        await syncProfile();
         updateHeaderUI();
-        syncProfile();
         document.getElementById('login-modal').style.display = 'none';
         loadRooms();
         loadPosts();
@@ -405,7 +420,6 @@
       if (!currentRoomObj) return;
 
       const isDefaultRoom = currentRoomObj.id === '00000000-0000-0000-0000-000000000001';
-      // TÀI KHOẢN ADMIN HOẶC TRƯỞNG PHÒNG ĐỀU CÓ QUYỀN SỬA/XÓA PHÒNG
       const isHost = currentRoomObj.creator_name === currentUser || isAdmin;
 
       document.getElementById('settings-room-header').innerText = `Cài Đặt: ${currentRoomObj.name}`;
@@ -530,7 +544,7 @@
     }
 
     async function loadUsers() {
-      const { data } = await _supabase.from('profiles').select('*').neq('user_name', currentUser);
+      const { data } = await _supabase.from('profiles').select('*').neq('user_id', currentUserId);
       allUsers = data || [];
       renderUsers(allUsers);
     }
@@ -637,7 +651,9 @@
       const isHost = currentRoomObj && currentRoomObj.creator_name === currentUser;
 
       (data || []).forEach(post => {
-        const isMine = post.user_name === currentUser;
+        // NHẬN DIỆN TIN NHẮN CỦA MÌNH BẰNG USER_ID HOẶC USER_NAME
+        const isMine = (currentUserId && post.user_id === currentUserId) || (post.user_name === currentUser);
+        
         const postEl = document.createElement('div');
         postEl.className = `post ${isMine ? 'mine' : ''}`;
 
@@ -687,7 +703,15 @@
       }
 
       await _supabase.from('posts').insert([
-        { user_name: currentUser, content, image_url: fileUrl, file_name: fileName, avatar_url: currentAvatar, conversation_id: currentRoomId }
+        { 
+          user_id: currentUserId,
+          user_name: currentUser, 
+          content: content, 
+          image_url: fileUrl, 
+          file_name: fileName, 
+          avatar_url: currentAvatar, 
+          conversation_id: currentRoomId 
+        }
       ]);
 
       contentInput.value = '';
@@ -718,9 +742,7 @@
       }
 
       currentUser = newName;
-      localStorage.setItem('chat_username', currentUser);
-      localStorage.setItem('chat_avatar', currentAvatar);
-      syncProfile();
+      await syncProfile();
       updateHeaderUI();
       closeProfileModal();
       loadPosts();
