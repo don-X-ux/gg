@@ -50,7 +50,6 @@
     .current-room-name { font-weight: bold; font-size: 0.95em; color: #1c1e21; display: flex; align-items: center; gap: 6px; }
     .mobile-back-btn { display: none; background: none; border: none; font-size: 1.1rem; cursor: pointer; color: #0068ff; margin-right: 8px; }
 
-    /* NÚT CÀI ĐẶT PHÒNG Ở GÓC TRÊN BÊN PHẢI */
     .room-settings-btn { background: none; border: none; font-size: 1.25rem; color: #5b6b7c; cursor: pointer; padding: 4px 8px; border-radius: 50%; transition: background 0.2s, color 0.2s; }
     .room-settings-btn:hover { background: #f0f2f5; color: #0068ff; }
 
@@ -144,7 +143,8 @@
 
       <!-- Khung thông tin dành cho Thành Viên -->
       <div id="guest-settings-panel" style="display: none;">
-        <p style="font-size: 0.9em; color: #555; margin: 10px 0;" id="guest-room-info">Thông tin phòng...</p>
+        <p style="font-size: 0.9em; color: #555; margin: 10px 0; text-align: left;" id="guest-room-info">Thông tin phòng...</p>
+        <button onclick="claimHostRights()" id="claim-host-btn" style="background: #faad14; margin-bottom: 6px; display: none;">Nhận Quyền Chủ Phòng</button>
         <button onclick="closeRoomSettingsModal()" style="background: #0068ff;">Đóng</button>
       </div>
 
@@ -199,7 +199,6 @@
           <span class="current-room-name" id="current-room-title">Phòng Chat Chung</span>
         </div>
         
-        <!-- NÚT CÀI ĐẶT PHÒNG Ở GÓC TRÊN BÊN PHẢI -->
         <button class="room-settings-btn" onclick="openRoomSettingsModal()" title="Cài đặt phòng chat">
           <i class="fa-solid fa-gear"></i>
         </button>
@@ -383,13 +382,13 @@
     function openRoomSettingsModal() {
       if (!currentRoomObj) return;
 
-      const isHost = currentRoomObj.creator_name === currentUser;
       const isDefaultRoom = currentRoomObj.id === '00000000-0000-0000-0000-000000000001';
+      // Kiểm tra nếu là chủ phòng hoặc phòng chưa có thông tin chủ (cơ chế phòng cũ)
+      const isHost = currentRoomObj.creator_name === currentUser || isAdmin;
 
       document.getElementById('settings-room-header').innerText = `Cài Đặt: ${currentRoomObj.name}`;
 
       if (isHost && !isDefaultRoom) {
-        // Giao diện cho Trưởng Phòng
         document.getElementById('host-settings-panel').style.display = 'block';
         document.getElementById('guest-settings-panel').style.display = 'none';
 
@@ -398,20 +397,41 @@
         document.getElementById('setting-room-pin').value = currentRoomObj.pin_code || '';
         togglePinInput(currentRoomObj.is_private ? 'private' : 'public', 'setting-room-pin');
       } else {
-        // Giao diện cho Thành Viên / Phòng mặc định
         document.getElementById('host-settings-panel').style.display = 'none';
         document.getElementById('guest-settings-panel').style.display = 'block';
 
-        const hostText = currentRoomObj.creator_name ? currentRoomObj.creator_name : 'Hệ Thống';
+        const hostText = currentRoomObj.creator_name ? currentRoomObj.creator_name : 'Chưa có (Phòng cũ)';
         const typeText = currentRoomObj.is_private ? 'Riêng tư (Có Mã PIN)' : 'Công khai';
+        
         document.getElementById('guest-room-info').innerHTML = `
           <strong>Chủ phòng:</strong> ${escapeHtml(hostText)}<br>
           <strong>Chế độ:</strong> ${typeText}<br>
           ${isDefaultRoom ? '<em>(Phòng chat chung hệ thống không thể chỉnh sửa)</em>' : ''}
         `;
+
+        // Nếu phòng chưa có chủ -> Cho phép nhận quyền làm chủ
+        const claimBtn = document.getElementById('claim-host-btn');
+        if (!currentRoomObj.creator_name && !isDefaultRoom) {
+          claimBtn.style.display = 'block';
+        } else {
+          claimBtn.style.display = 'none';
+        }
       }
 
       document.getElementById('room-settings-modal').style.display = 'flex';
+    }
+
+    async function claimHostRights() {
+      if (!currentRoomObj) return;
+      const { error } = await _supabase.from('conversations').update({ creator_name: currentUser }).eq('id', currentRoomObj.id);
+      if (!error) {
+        alert("Bạn đã nhận quyền Trưởng phòng thành công!");
+        currentRoomObj.creator_name = currentUser;
+        openRoomSettingsModal();
+        loadRooms();
+      } else {
+        alert("Lỗi khi nhận quyền!");
+      }
     }
 
     function closeRoomSettingsModal() {
@@ -431,7 +451,8 @@
       const { error } = await _supabase.from('conversations').update({
         name: newName,
         is_private: (newType === 'private'),
-        pin_code: newPin
+        pin_code: newPin,
+        creator_name: currentRoomObj.creator_name || currentUser
       }).eq('id', currentRoomObj.id);
 
       if (!error) {
@@ -439,6 +460,7 @@
         currentRoomObj.name = newName;
         currentRoomObj.is_private = (newType === 'private');
         currentRoomObj.pin_code = newPin;
+        currentRoomObj.creator_name = currentRoomObj.creator_name || currentUser;
 
         selectRoom(currentRoomObj);
         closeRoomSettingsModal();
@@ -478,6 +500,12 @@
     async function loadRooms() {
       const { data } = await _supabase.from('conversations').select('*').order('created_at', { ascending: true });
       allRooms = data || [];
+      
+      // Tự động tìm lại đối tượng phòng hiện tại
+      if (allRooms.length > 0) {
+        const found = allRooms.find(r => r.id === currentRoomId);
+        if (found) currentRoomObj = found;
+      }
       renderRooms(allRooms);
     }
 
