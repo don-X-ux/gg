@@ -258,7 +258,6 @@
         currentUserId = session.user.id;
         const userEmail = session.user.email;
 
-        // KIỂM TRA QUYỀN ADMIN TỪ BẢNG system_admins
         if (userEmail) {
           const { data: adminCheck } = await _supabase.from('system_admins').select('*').eq('email', userEmail);
           if (adminCheck && adminCheck.length > 0) isAdmin = true;
@@ -284,7 +283,6 @@
       }
     };
 
-    /* REALTIME */
     function initRealtime() {
       if (realtimeChannel) _supabase.removeChannel(realtimeChannel);
 
@@ -311,7 +309,6 @@
 
     function toggleDarkMode() { document.body.classList.toggle('dark-mode'); }
 
-    /* AUTHENTICATION */
     function toggleAuthMode() {
       isSignUpMode = !isSignUpMode;
       document.getElementById('modal-title').innerText = isSignUpMode ? 'Đăng Ký Tài Khoản' : 'Đăng Nhập Tài Khoản';
@@ -359,7 +356,6 @@
       document.getElementById('header-user-avatar').src = currentAvatar;
     }
 
-    /* QUẢN LÝ TẠO & CÀI ĐẶT PHÒNG CHAT */
     function openCreateRoomModal() { document.getElementById('create-room-modal').style.display = 'flex'; }
     function closeCreateRoomModal() { document.getElementById('create-room-modal').style.display = 'none'; }
     function togglePinInput(type, elementId) { 
@@ -496,7 +492,6 @@
       }
     }
 
-    /* ĐĂNG & TẢI TIN NHẮN PRO */
     async function loadPosts() {
       const { data: posts } = await _supabase.from('posts').select('*').eq('conversation_id', currentRoomId).order('created_at', { ascending: true });
       const { data: reactions } = await _supabase.from('post_reactions').select('*');
@@ -601,7 +596,7 @@
       await _supabase.from('posts').update({ is_recalled: true }).eq('id', postId);
     }
 
-    /* QUẢN LÝ PHÒNG & USERS */
+    /* CHỈ LẤY CÁC PHÒNG CHAT NHÓM (CHỈNH SỬA TẠI ĐÂY) */
     function switchTab(tab) {
       currentTab = tab;
       document.getElementById('tab-rooms-btn').className = `tab-btn ${tab === 'rooms' ? 'active' : ''}`;
@@ -610,7 +605,13 @@
     }
 
     async function loadRooms() {
-      const { data } = await _supabase.from('conversations').select('*').order('created_at', { ascending: true });
+      // Lọc điều kiện: is_group = true để không hiện phòng chat cá nhân
+      const { data } = await _supabase
+        .from('conversations')
+        .select('*')
+        .eq('is_group', true)
+        .order('created_at', { ascending: true });
+        
       allRooms = data || [];
       if (allRooms.length > 0) {
         const found = allRooms.find(r => r.id === currentRoomId);
@@ -670,11 +671,18 @@
     async function startPrivateChat(targetUser) {
       const pair = [currentUser, targetUser].sort();
       const privateRoomName = `Chat: ${pair[0]} & ${pair[1]}`;
+      
       let { data: existing } = await _supabase.from('conversations').select('*').eq('name', privateRoomName);
-      if (existing && existing.length > 0) selectRoom(existing[0]);
-      else {
-        const { data: newRoom } = await _supabase.from('conversations').insert([{ name: privateRoomName, is_group: false, creator_name: currentUser, is_private: true }]).select();
-        if (newRoom && newRoom.length > 0) selectRoom(newRoom[0]);
+      if (existing && existing.length > 0) {
+        selectRoom(existing[0]);
+      } else {
+        const { data: newRoom } = await _supabase.from('conversations').insert([
+          { name: privateRoomName, is_group: false, creator_name: currentUser, is_private: true }
+        ]).select();
+        
+        if (newRoom && newRoom.length > 0) {
+          selectRoom(newRoom[0]);
+        }
       }
     }
 
