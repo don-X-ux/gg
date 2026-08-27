@@ -448,17 +448,52 @@
 
     async function deleteCurrentRoom() {
       if (!currentRoomObj) return;
-      if (currentRoomObj.id === '00000000-0000-0000-0000-000000000001') return alert("Không thể xóa Phòng Chat Chung!");
-      if (!confirm(`Xóa vĩnh viễn phòng [${currentRoomObj.name}]?`)) return;
 
-      await _supabase.from('posts').delete().eq('conversation_id', currentRoomObj.id);
-      await _supabase.from('conversations').delete().eq('id', currentRoomObj.id);
+      if (currentRoomObj.id === '00000000-0000-0000-0000-000000000001') {
+        return alert("Không thể xóa Phòng Chat Chung của hệ thống!");
+      }
 
-      alert("Đã xóa phòng chat!");
-      closeRoomSettingsModal();
-      const { data } = await _supabase.from('conversations').select('*').eq('id', '00000000-0000-0000-0000-000000000001');
-      if (data && data.length > 0) selectRoom(data[0]);
-      loadRooms();
+      const isHost = currentRoomObj.creator_name === currentUser || isAdmin;
+      if (!isHost) {
+        return alert("Bạn không có quyền xóa phòng chat này!");
+      }
+
+      if (!confirm(`CẢNH BÁO: Xóa vĩnh viễn phòng chat [${currentRoomObj.name}] và toàn bộ tin nhắn?`)) return;
+
+      try {
+        const { error: postErr } = await _supabase
+          .from('posts')
+          .delete()
+          .eq('conversation_id', currentRoomObj.id);
+
+        if (postErr) console.warn("Lỗi xóa tin nhắn:", postErr.message);
+
+        const { error: roomErr } = await _supabase
+          .from('conversations')
+          .delete()
+          .eq('id', currentRoomObj.id);
+
+        if (roomErr) {
+          alert("Lỗi từ CSDL khi xóa phòng: " + roomErr.message);
+          return;
+        }
+
+        alert("Đã xóa phòng chat thành công!");
+        closeRoomSettingsModal();
+
+        const { data } = await _supabase
+          .from('conversations')
+          .select('*')
+          .eq('id', '00000000-0000-0000-0000-000000000001');
+
+        if (data && data.length > 0) {
+          selectRoom(data[0]);
+        }
+        loadRooms();
+
+      } catch (err) {
+        alert("Xảy ra lỗi ngoài dự kiến: " + err.message);
+      }
     }
 
     /* ĐĂNG & TẢI TIN NHẮN PRO */
@@ -547,7 +582,7 @@
           image_url: fileUrl, 
           file_name: fileName, 
           avatar_url: currentAvatar, 
-          conversation_id: currentRoomId // Đảm bảo luôn gửi đúng ID phòng
+          conversation_id: currentRoomId
         }
       ]);
 
@@ -648,6 +683,12 @@
     function clearFile() { selectedFile = null; document.getElementById('hidden-file-input').value = ''; document.getElementById('file-preview').style.display = 'none'; }
     function handleKeyPress(e) { if (e.key === 'Enter') createPost(); }
     function escapeHtml(text) { return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+    function backToSidebar() { document.getElementById('app-container').classList.remove('mobile-chat-open'); }
+    function handleSearch() {
+      const query = document.getElementById('search-input').value.toLowerCase();
+      if (currentTab === 'rooms') renderRooms(allRooms.filter(r => r.name.toLowerCase().includes(query)));
+      else renderUsers(allUsers.filter(u => u.user_name.toLowerCase().includes(query)));
+    }
   </script>
 </body>
 </html>
