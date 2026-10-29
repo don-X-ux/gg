@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Code Studio - Trình soạn thảo HTML Trực Tiếp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .code-font {
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* VS Code style error squiggles using SVG background */
+        .squiggly-error {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 3' enable-background='new 0 0 6 3' xml:space='preserve'%3E%3Cpolygon points='0,3 3,0 6,3' fill='%23f43f5e'/%3E%3C/svg%3E");
+            background-repeat: repeat-x;
+            background-position: bottom;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 h-screen flex flex-col overflow-hidden">
+
+    <header
+        class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-md">
+        <div class="flex items-center space-x-3">
+            <div
+                class="bg-indigo-600 p-2 rounded-lg text-white font-bold flex items-center justify-center shadow-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+            </div>
+            <div>
+                <h1 class="font-bold text-base text-slate-100 tracking-wide">Live Code Studio</h1>
+                <p class="text-xs text-slate-400">Soạn thảo & Quản lý file HTML thông minh</p>
+            </div>
+        </div>
+
+        <!-- Toolbar Controls: File Actions, Zoom & Status -->
+        <div class="flex items-center space-x-3">
+            <!-- File Action Buttons -->
+            <div class="flex items-center space-x-1.5 bg-slate-800 p-1 rounded-lg border border-slate-700">
+                <button onclick="openFile()"
+                    class="flex items-center space-x-1 px-2.5 py-1.5 hover:bg-slate-700 rounded text-xs text-slate-300 hover:text-white transition font-medium"
+                    title="Mở file HTML từ máy tính">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-indigo-400" fill="none"
+                        viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    <span>Mở file</span>
+                </button>
+                <button onclick="saveFile()"
+                    class="flex items-center space-x-1 px-2.5 py-1.5 hover:bg-slate-700 rounded text-xs text-slate-300 hover:text-white transition font-medium"
+                    title="Lưu file HTML xuống máy">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-400" fill="none"
+                        viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                    </svg>
+                    <span>Lưu file</span>
+                </button>
+            </div>
+
+            <div class="h-5 w-px bg-slate-700"></div>
+
+            <!-- Syntax status indicator -->
+            <div id="errorIndicator"
+                class="flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                <span id="errorIndicatorDot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span id="errorIndicatorText">0 lỗi</span>
+            </div>
+
+            <div class="h-5 w-px bg-slate-700"></div>
+
+            <!-- Zoom Controls -->
+            <div class="flex items-center space-x-1 bg-slate-800 p-1 rounded-lg border border-slate-700">
+                <button onclick="adjustZoom(-10)"
+                    class="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white transition" title="Thu nhỏ">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                    </svg>
+                </button>
+                <span id="zoomLevel" class="text-xs font-mono px-2 text-slate-300 select-none">100%</span>
+                <button onclick="adjustZoom(10)"
+                    class="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white transition"
+                    title="Phóng to">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                </button>
+                <button onclick="resetZoom()"
+                    class="px-2 py-1 hover:bg-slate-700 rounded text-xs text-slate-300 hover:text-white transition font-medium">Reset</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+        <!-- Left Pane: Code Editor with VS Code overlay highlights -->
+        <div
+            class="flex-1 flex flex-col h-1/2 md:h-full border-b md:border-b-0 md:border-r border-slate-800 bg-slate-900 relative">
+            <div
+                class="bg-slate-850 px-4 py-1.5 text-xs font-semibold text-slate-400 border-b border-slate-800 flex justify-between items-center select-none">
+                <span id="fileNameDisplay" class="truncate text-indigo-400 font-mono">index.html (Chưa lưu)</span>
+                <span id="cursorPos" class="font-mono text-slate-500">Ln 1, Col 1</span>
+            </div>
+
+            <!-- Editor Wrapper with Line Numbers -->
+            <div class="flex-1 relative flex overflow-hidden bg-slate-950">
+                <!-- Line Numbers -->
+                <div id="lineNumbers"
+                    class="code-font py-3 px-2 text-right text-slate-600 select-none bg-slate-900/50 border-r border-slate-800/80 text-xs overflow-hidden leading-relaxed w-12 shrink-0">
+                    1
+                </div>
+
+                <!-- Textarea and Error highlight overlay container -->
+                <div class="relative flex-1 h-full overflow-hidden">
+                    <!-- VS Code style backdrop overlay for error underlines -->
+                    <div id="errorOverlay"
+                        class="code-font absolute inset-0 w-full h-full p-3 text-transparent bg-transparent text-xs leading-relaxed pointer-events-none whitespace-pre-wrap break-words overflow-hidden z-20">
+                    </div>
+
+                    <textarea id="codeEditor" oninput="onCodeInput()" onscroll="syncScroll()"
+                        onkeyup="updateCursorPosition()" onclick="updateCursorPosition()" spellcheck="false"
+                        placeholder="Nhập mã HTML ở đây (ví dụ: <!DOCTYPE html>)..."
+                        class="code-font absolute inset-0 w-full h-full p-3 bg-transparent text-slate-200 text-xs leading-relaxed resize-none focus:outline-none whitespace-pre-wrap break-words overflow-auto z-10"
+                        style="caret-color: #38bdf8; tab-size: 4;"></textarea>
+                </div>
+            </div>
+
+            <!-- Bottom Error Bar / Status -->
+            <div id="errorBar"
+                class="bg-slate-900 px-3 py-1.5 border-t border-slate-800 text-xs text-slate-400 flex items-center justify-between shrink-0">
+                <span id="errorDetails" class="truncate">Trạng thái: Sẵn sàng</span>
+                <span class="text-slate-500 text-[10px]">Trần Kiên Trinh</span>
+            </div>
+        </div>
+
+        <!-- Right Pane: Live Preview -->
+        <div class="flex-1 flex flex-col h-1/2 md:h-full bg-white relative">
+            <div
+                class="bg-slate-100 px-4 py-1.5 text-xs font-semibold text-slate-700 border-b border-slate-200 flex justify-between items-center select-none">
+                <span class="flex items-center space-x-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>KẾT QUẢ HIỂN THỊ TRỰC TIẾP</span>
+                </span>
+                <span id="previewZoomLabel" class="text-slate-500 font-mono text-[11px]">100%</span>
+            </div>
+
+            <div id="previewContainer"
+                class="flex-1 relative overflow-auto bg-slate-100 flex items-start justify-center p-0">
+                <div id="previewWrapper"
+                    class="w-full h-full transition-transform duration-150 origin-top-left bg-white shadow-sm">
+                    <iframe id="previewFrame" class="w-full h-full border-0 bg-white" title="Live Preview"></iframe>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        let currentZoom = 100;
+        let currentFileName = 'index.html';
+        let fileHandle = null; // Lưu trữ handle nếu dùng File System Access API
+
+        // Khởi động khi tải trang hoàn tất
+        window.addEventListener('DOMContentLoaded', () => {
+            const editor = document.getElementById('codeEditor');
+            editor.value = '';
+            updateLineNumbers();
+            updatePreview();
+            validateSyntax();
+        });
+
+        // Hàm Mở file từ máy tính
+        async function openFile() {
+            // Kiểm tra hỗ trợ File System Access API
+            if ('showOpenFilePicker' in window) {
+                try {
+                    const [handle] = await window.showOpenFilePicker({
+                        types: [{
+                            description: 'HTML Files',
+                            accept: { 'text/html': ['.html', '.htm'] }
+                        }],
+                        multiple: false
+                    });
+                    fileHandle = handle;
+                    const file = await handle.getFile();
+                    currentFileName = file.name;
+                    const content = await file.text();
+
+                    document.getElementById('codeEditor').value = content;
+                    document.getElementById('fileNameDisplay').innerText = currentFileName;
+                    onCodeInput();
+                    showNotification(`Đã mở file thành công: ${currentFileName}`, 'success');
+                    return;
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error(err);
+                    }
+                    return;
+                }
+            }
+
+            // Fallback cho trình duyệt cũ bằng thẻ input file ẩn
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.html,.htm';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (file) {
+                    currentFileName = file.name;
+                    fileHandle = null;
+                    const reader = new FileReader();
+                    reader.onload = event => {
+                        document.getElementById('codeEditor').value = event.target.result;
+                        document.getElementById('fileNameDisplay').innerText = currentFileName;
+                        onCodeInput();
+                        showNotification(`Đã mở file: ${currentFileName}`, 'success');
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+        }
+
+        // Hàm Lưu file xuống máy tính
+        async function saveFile() {
+            const code = document.getElementById('codeEditor').value;
+
+            // Sử dụng File System Access API nếu có (cho phép lưu trực tiếp đè lên file cũ)
+            if ('showSaveFilePicker' in window) {
+                try {
+                    if (!fileHandle) {
+                        fileHandle = await window.showSaveFilePicker({
+                            suggestedName: currentFileName,
+                            types: [{
+                                description: 'HTML Files',
+                                accept: { 'text/html': ['.html'] }
+                            }]
+                        });
+                        currentFileName = fileHandle.name;
+                        document.getElementById('fileNameDisplay').innerText = currentFileName;
+                    }
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(code);
+                    await writable.close();
+                    showNotification(`Đã lưu file thành công: ${currentFileName}`, 'success');
+                    return;
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error(err);
+                    }
+                    return;
+                }
+            }
+
+            // Fallback phương pháp Blob Download cổ điển an toàn tuyệt đối
+            const blob = new Blob([code], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = currentFileName || 'index.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showNotification(`Đã tải xuống file: ${currentFileName}`, 'success');
+        }
+
+        // Thông báo trạng thái nhỏ góc màn hình
+        function showNotification(message, type = 'success') {
+            const errorDetails = document.getElementById('errorDetails');
+            const originalText = errorDetails.innerHTML;
+            errorDetails.innerHTML = `<span class="text-emerald-400 font-semibold">${message}</span>`;
+            setTimeout(() => {
+                validateSyntax(); // Khôi phục lại trạng thái lỗi hiện tại
+            }, 3500);
+        }
+
+        // Đồng bộ cuộn giữa textarea và overlay
+        function syncScroll() {
+            const editor = document.getElementById('codeEditor');
+            const lineNumbers = document.getElementById('lineNumbers');
+            const errorOverlay = document.getElementById('errorOverlay');
+            lineNumbers.scrollTop = editor.scrollTop;
+            errorOverlay.scrollTop = editor.scrollTop;
+            errorOverlay.scrollLeft = editor.scrollLeft;
+        }
+
+        // Cập nhật số dòng tự động
+        function updateLineNumbers() {
+            const editor = document.getElementById('codeEditor');
+            const lines = editor.value.split('\n').length;
+            let numbersHtml = '';
+            for (let i = 1; i <= Math.max(lines, 1); i++) {
+                numbersHtml += i + '<br>';
+            }
+            document.getElementById('lineNumbers').innerHTML = numbersHtml;
+        }
+
+        // Cập nhật vị trí con trỏ (Dòng, Cột)
+        function updateCursorPosition() {
+            const editor = document.getElementById('codeEditor');
+            const pos = editor.selectionStart;
+            const textLines = editor.value.substring(0, pos).split('\n');
+            const line = textLines.length;
+            const col = textLines[textLines.length - 1].length + 1;
+            document.getElementById('cursorPos').innerText = `Ln ${line}, Col ${col}`;
+        }
+
+        // Thoát HTML để hiển thị an toàn trong overlay
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Mô phỏng logic kiểm tra lỗi giống VS Code
+        function validateSyntax() {
+            const editor = document.getElementById('codeEditor');
+            const code = editor.value;
+            const errorIndicator = document.getElementById('errorIndicator');
+            const errorIndicatorDot = document.getElementById('errorIndicatorDot');
+            const errorIndicatorText = document.getElementById('errorIndicatorText');
+            const errorDetails = document.getElementById('errorDetails');
+            const errorOverlay = document.getElementById('errorOverlay');
+
+            let errors = [];
+            let lines = code.split('\n');
+            let highlightedLines = [];
+
+            lines.forEach((line, lineIdx) => {
+                let modifiedLine = escapeHtml(line);
+
+                // 1. Kiểm tra DOCTYPE sai cú pháp
+                const doctypeRegex = /<!([^>]*)/g;
+                let match;
+                while ((match = doctypeRegex.exec(line)) !== null) {
+                    const content = match[1].trim();
+                    if (content.toLowerCase().startsWith('doc') || content.toLowerCase().startsWith('doctype')) {
+                        const normalized = content.toLowerCase();
+                        if (normalized !== 'doctype html') {
+                            errors.push({
+                                message: `Lỗi cú pháp DOCTYPE: "${match[0]}" không hợp lệ. Chuẩn xác phải là: <!DOCTYPE html>`,
+                                line: lineIdx + 1
+                            });
+                            const badPart = escapeHtml(match[0]);
+                            modifiedLine = modifiedLine.replace(badPart, `<span class="squiggly-error text-rose-400 font-bold">${badPart}</span>`);
+                        }
+                    }
+                }
+
+                // 2. Kiểm tra thiếu dấu đóng ngoặc '>'
+                const openAngle = line.indexOf('<');
+                const closeAngle = line.indexOf('>');
+                if (openAngle !== -1 && (closeAngle === -1 || closeAngle < openAngle)) {
+                    errors.push({
+                        message: `Thiếu dấu đóng ngoặc '>' cho thẻ tại dòng ${lineIdx + 1}`,
+                        line: lineIdx + 1
+                    });
+                    const badPart = escapeHtml(line.substring(openAngle));
+                    modifiedLine = modifiedLine.replace(badPart, `<span class="squiggly-error text-rose-400 font-bold">${badPart}</span>`);
+                }
+
+                highlightedLines.push(modifiedLine);
+            });
+
+            errorOverlay.innerHTML = highlightedLines.join('\n');
+
+            if (errors.length > 0) {
+                errorIndicator.className = "flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium";
+                errorIndicatorDot.className = "w-2 h-2 rounded-full bg-rose-500 animate-pulse";
+                errorIndicatorText.innerText = `${errors.length} lỗi`;
+                errorDetails.innerHTML = `<span class="text-rose-400 font-semibold">Lỗi (Dòng ${errors[0].line}):</span> ${errors[0].message}`;
+            } else {
+                errorIndicator.className = "flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium";
+                errorIndicatorDot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+                errorIndicatorText.innerText = "0 lỗi";
+                errorDetails.innerText = "Trạng thái: Mã nguồn chuẩn xác, không phát hiện lỗi cú pháp.";
+            }
+        }
+
+        // Cập nhật kết quả hiển thị thời gian thực vào iframe thông qua Blob URL an toàn
+        function updatePreview() {
+            const code = document.getElementById('codeEditor').value;
+            const iframe = document.getElementById('previewFrame');
+
+            const blob = new Blob([code], { type: 'text/html;charset=utf-8' });
+
+            if (iframe.dataset.blobUrl) {
+                URL.revokeObjectURL(iframe.dataset.blobUrl);
+            }
+
+            const blobUrl = URL.createObjectURL(blob);
+            iframe.dataset.blobUrl = blobUrl;
+            iframe.src = blobUrl;
+        }
+
+        // Xử lý sự kiện khi gõ code
+        function onCodeInput() {
+            updateLineNumbers();
+            updateCursorPosition();
+            validateSyntax();
+            updatePreview();
+        }
+
+        // Điều chỉnh thu phóng khung kết quả
+        function adjustZoom(amount) {
+            currentZoom = Math.max(50, Math.min(200, currentZoom + amount));
+            applyZoom();
+        }
+
+        function resetZoom() {
+            currentZoom = 100;
+            applyZoom();
+        }
+
+        function applyZoom() {
+            document.getElementById('zoomLevel').innerText = currentZoom + '%';
+            document.getElementById('previewZoomLabel').innerText = currentZoom + '%';
+            const iframe = document.getElementById('previewFrame');
+            const scale = currentZoom / 100;
+            iframe.style.width = (100 / scale) + '%';
+            iframe.style.height = (100 / scale) + '%';
+            iframe.style.transform = `scale(${scale})`;
+            iframe.style.transformOrigin = '0 0';
+        }
+    </script>
+</body>
+
+</html>
